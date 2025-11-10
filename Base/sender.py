@@ -2,7 +2,7 @@ import PIL
 import PIL.Image
 from communication import Transfer, HEAD, IMAGE_TYPE, Packet
 
-mainline = Transfer("COM3", timeout=5)
+#mainline = Transfer("COM3", timeout=5)
 
 def rgb888_to_rgb565(r: int, g: int, b: int) -> bytes:
     """
@@ -30,23 +30,29 @@ def rgb888_to_rgb565(r: int, g: int, b: int) -> bytes:
     return rgb565.to_bytes(2, byteorder='big')
 
 
-# Ensure image size is a multiple of 8
 SIZE = 480
-if (SIZE * SIZE) % 8 != 0:
-    SIZE = ((SIZE * SIZE) // 8) * 8
-    SIZE = int(SIZE ** 0.5)  # Make it square again (approximate)
-    SIZE = SIZE if (SIZE * SIZE) % 8 == 0 else SIZE + 1
 
-print(SIZE*SIZE)
 img = PIL.Image.open("DAMN.jpeg")
 img = img.convert("RGB")
 img = img.resize((SIZE, SIZE))
+#This does not return just the pixels, it has other datatypes, so be this needs to change
 pixs = tuple(img.getdata())
+
+new_img_data = []
 
 for idx in range(0, SIZE*SIZE, 8):
     print(idx)
     group = pixs[idx:idx+8]
+    for color in group:
+        new_img_data.append(color)
     colors = b''.join(rgb888_to_rgb565(r, g, b) for r, g, b in group)
+    new_img_data.append(colors)
     packet = Packet(HEAD, IMAGE_TYPE, timestamp=b'\x00\x00\x00\x00', data=colors, crc=b'\x00\x00', verbose=False)
-    mainline.send_packet(packet)
-    print(f"Sent pixels {idx} to {idx+7} as packet: {packet}")
+    #mainline.send_packet(packet)
+    #print(f"Sent pixels {idx} to {idx+7} as packet: {packet}")
+
+# Save the data sent as image for later comparison
+new_img = PIL.Image.new("RGB", (SIZE, SIZE))
+print(new_img_data)
+new_img.putdata(new_img_data)
+new_img.save("DAMN_converted.jpeg")

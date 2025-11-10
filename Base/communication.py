@@ -10,13 +10,6 @@ TYPES_PAYLOAD = {
     IMAGE_TYPE: 48,
 }
 
-def save_packets(filename:str, packets:list):
-    """Saves a list of packets to a file in JSON format."""
-    import json
-
-    with open(filename, "w") as f:
-        json.dump([packet.asjson() for packet in packets], f)
-
 class Packet:
     """Handles packet data using the PHUC Protocol.
     
@@ -55,7 +48,7 @@ class Packet:
         if verbose:
             if not self.crcpass:
                 print(f"Packet of type {self.type} at {self.timestamp} failed CRC.")
-        #raise NotImplementedError("Packet class must be done")
+
 
     def asjson(self)->dict:
         """Returns a dictionary containing all the packet information to save in a json file."""
