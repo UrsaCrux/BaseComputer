@@ -1,7 +1,7 @@
 import serial
 import serial.tools.list_ports
 
-from Base.data import Packet
+from computer.data import Packet
 from typing import Generator
 
 HEAD = b"\x14"
