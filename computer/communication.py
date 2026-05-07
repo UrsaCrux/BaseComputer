@@ -6,9 +6,16 @@ from typing import Generator
 
 HEAD = b"\x14"
 IMAGE_TYPE = b"\x00"
+# tipos nuevos
+IMU_TYPE   = b"\x01"
+GPS_TYPE   = b"\x02"
+BARO_TYPE  = b"\x03"
 
 TYPES_PAYLOAD = {
     IMAGE_TYPE: 48,
+    IMU_TYPE:   36,
+    GPS_TYPE:   16,
+    BARO_TYPE:  12,
 }
 
 class Transfer:

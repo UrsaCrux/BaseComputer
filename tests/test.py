@@ -1,10 +1,11 @@
-from communication import Transfer, save_packets
+# test_ws.py
+import asyncio
+import websockets
 
-mainline = Transfer("COM3")
+async def test():
+    async with websockets.connect("ws://localhost:8765") as ws:
+        for _ in range(5):
+            msg = await ws.recv()
+            print(msg)
 
-all_packets = []
-for packet in mainline.receive_packets():
-    print(packet)
-    all_packets.append(packet)
-
-save_packets("received_packets.json", all_packets)
+asyncio.run(test())
