@@ -1,0 +1,90 @@
+﻿{
+    "name": "UrsaCrux Telemetry",
+    "identifier": "ursacrux",
+    "measurements": [
+        {
+            "name": "Accel X", "key": "imu.accel_x",
+            "values": [
+                {"key": "value", "name": "Value", "units": "m/s2", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "Accel Y", "key": "imu.accel_y",
+            "values": [
+                {"key": "value", "name": "Value", "units": "m/s2", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "Accel Z", "key": "imu.accel_z",
+            "values": [
+                {"key": "value", "name": "Value", "units": "m/s2", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "Gyro X", "key": "imu.gyro_x",
+            "values": [
+                {"key": "value", "name": "Value", "units": "deg/s", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "Gyro Y", "key": "imu.gyro_y",
+            "values": [
+                {"key": "value", "name": "Value", "units": "deg/s", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "Gyro Z", "key": "imu.gyro_z",
+            "values": [
+                {"key": "value", "name": "Value", "units": "deg/s", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "GPS Latitud", "key": "gps.lat",
+            "values": [
+                {"key": "value", "name": "Value", "units": "deg", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "GPS Longitud", "key": "gps.lon",
+            "values": [
+                {"key": "value", "name": "Value", "units": "deg", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "GPS Altitud", "key": "gps.alt",
+            "values": [
+                {"key": "value", "name": "Value", "units": "m", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "Barometro Altitud", "key": "baro.alt",
+            "values": [
+                {"key": "value", "name": "Value", "units": "m", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "Barometro Temperatura", "key": "baro.temp",
+            "values": [
+                {"key": "value", "name": "Value", "units": "C", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        },
+        {
+            "name": "Barometro Presion", "key": "baro.presion",
+            "values": [
+                {"key": "value", "name": "Value", "units": "hPa", "format": "float", "hints": {"range": 1}},
+                {"key": "utc",   "name": "Timestamp", "format": "utc", "hints": {"domain": 1}}
+            ]
+        }
+    ]
+}

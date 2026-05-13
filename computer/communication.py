@@ -1,14 +1,25 @@
 import serial
 import serial.tools.list_ports
 
+<<<<<<< HEAD
 from data import Packet
+=======
+from computer.data import Packet
+>>>>>>> c92dde504161bb4595d66fef21f8c967f5a3cd8a
 from typing import Generator
 
 HEAD = b"\x14"
 IMAGE_TYPE = b"\x00"
+# tipos nuevos
+IMU_TYPE   = b"\x01"
+GPS_TYPE   = b"\x02"
+BARO_TYPE  = b"\x03"
 
 TYPES_PAYLOAD = {
     IMAGE_TYPE: 48,
+    IMU_TYPE:   36,
+    GPS_TYPE:   16,
+    BARO_TYPE:  12,
 }
 
 class Transfer:
