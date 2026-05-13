@@ -1,11 +1,7 @@
 import serial
 import serial.tools.list_ports
 
-<<<<<<< HEAD
-from data import Packet
-=======
-from computer.data import Packet
->>>>>>> c92dde504161bb4595d66fef21f8c967f5a3cd8a
+from .data import Packet
 from typing import Generator
 
 HEAD = b"\x14"
