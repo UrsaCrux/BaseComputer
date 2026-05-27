@@ -1,7 +1,5 @@
-
-# BaseComputerLiz — Fork para Proyecto Hermes
-
-Fork de [BaseComputer](https://github.com/ursacrux/BaseComputer) adaptado para el **Proyecto Hermes** (globo aerostático), con cambios en el protocolo de paquetes binarios PHUC para optimizar la transmisión vía **LoRa SX1262**.
+# -----Editar readme ----
+## BaseComputerLiz — Fork para Proyecto Hermes
 
 ---
 
@@ -9,7 +7,7 @@ Fork de [BaseComputer](https://github.com/ursacrux/BaseComputer) adaptado para e
 
 ### 1. Protocolo PHUC adaptado para LoRa (`computer/communication.py`)
 
-El protocolo original usaba `float32` (4 bytes) para todos los valores, pensado para transmisión serial de corta distancia en el cohete. Para LoRa a largas distancias, se redujo el tamaño de los paquetes usando tipos enteros más pequeños:
+El protocolo original usaba `float32` ahora usa int(16-32)
 
 | Sensor | Original | Hermes | Reducción |
 |--------|----------|--------|-----------|
@@ -18,7 +16,6 @@ El protocolo original usaba `float32` (4 bytes) para todos los valores, pensado 
 | Barómetro (BME280) | 12B (3×float32) | 6B (uint16+int16+uint16) | -50% |
 | **Total por ciclo** | **124B** | **55B** | **-56%** |
 
-El timestamp también se redujo de **4 a 3 bytes**, suficiente para ~4.6 horas de vuelo.
 
 #### Factores de escala usados
 
