@@ -3,20 +3,25 @@ import serial.tools.list_ports
 
 from .data import Packet
 from typing import Generator
-
 HEAD = b"\x14"
 IMAGE_TYPE = b"\x00"
-# tipos nuevos
 IMU_TYPE   = b"\x01"
 GPS_TYPE   = b"\x02"
 BARO_TYPE  = b"\x03"
 
+# Tamaños nuevos (modificables según config del microcontrolador)
 TYPES_PAYLOAD = {
     IMAGE_TYPE: 48,
-    IMU_TYPE:   36,
-    GPS_TYPE:   16,
-    BARO_TYPE:  12,
+    IMU_TYPE:   18,  
+    GPS_TYPE:   10,  
+    BARO_TYPE:   6,  
 }
+
+# Factores de escala para reconstruir las unidades reales(para mas realismo)
+IMU_ACCEL_SCALE = 1 / 100.0   # LSB m/s²  (ajustar según config MPU9250)
+IMU_GYRO_SCALE  = 1 / 100.0   # LSB °/s
+IMU_MAG_SCALE   = 1 / 10.0    # LSB → µT
+
 
 class Transfer:
 
@@ -158,30 +163,19 @@ class Transfer:
         return self.channel.write(packet.head + packet.type + packet.timestamp + packet.data + packet.crc)
 
     def receive_packets(self):
-        """
-        Receives packets continuously from the serial channel until timeout.
-
-        Yields
-        ------
-        Packet
-            Each packet received, parsed into a Packet object.
-        """
         while True:
             while self.getbyte() != HEAD:
                 continue
             
-            # Packet parsing logic to be implemented
             packet_byte = self.getbyte()
-            if not packet_byte in TYPES_PAYLOAD:
+            if packet_byte not in TYPES_PAYLOAD:
                 print(f"Unknown packet type: {packet_byte}")
                 continue
 
             length = TYPES_PAYLOAD[packet_byte]
-            timestamp = self.getbytes(4)
-
+            timestamp = self.getbytes(4)  # ver si cambiar de 4 a 3
             data = self.getbytes(length)
             crc = self.getbytes(2)
 
-            # Create and yield the packet
             packet = Packet(HEAD, packet_byte, timestamp, data, crc)
             yield packet

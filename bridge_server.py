@@ -5,15 +5,40 @@ import json
 import struct
 import random
 import time
+import csv
+import os
+from datetime import datetime
+from aiohttp import web
+from computer.communication import (
+    Transfer, IMU_TYPE, GPS_TYPE, BARO_TYPE,
+    IMU_ACCEL_SCALE, IMU_GYRO_SCALE, IMU_MAG_SCALE
+)
 
-from computer.communication import Transfer, IMU_TYPE, GPS_TYPE, BARO_TYPE
-
-# config.
-MODO_PRUEBA = True   # True = datos falsos , False = serial real
-PORT        = "/dev/ttyUSB0"  # solo importa si MODO_PRUEBA = False
+MODO_PRUEBA = False
+PORT        = "COM3"
 BAUDRATE    = 115200
 
+# CSV
+CSV_FOLDER  = "telemetry_logs"
+os.makedirs(CSV_FOLDER, exist_ok=True)
+CSV_FILE    = os.path.join(CSV_FOLDER, f"telemetry_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+CSV_HEADERS = ["timestamp", "sensor", "variable", "value"]
 
+def init_csv():
+    if not os.path.exists(CSV_FILE):
+        with open(CSV_FILE, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(CSV_HEADERS)
+
+def save_to_csv(mediciones):
+    with open(CSV_FILE, 'a', newline='') as f:
+        writer = csv.writer(f)
+        for m in mediciones:
+            sensor   = m["id"].split(".")[0]
+            variable = m["id"].split(".")[1]
+            writer.writerow([m["timestamp"], sensor, variable, m["value"]])
+
+# WebSocket
 clientes = set()
 
 async def handler(websocket):
@@ -28,36 +53,35 @@ async def broadcast(mensaje: str):
     if clientes:
         await asyncio.gather(*[ws.send(mensaje) for ws in clientes])
 
-# desempaquetadores 
+# Desempaquetadores
 def unpack_imu(data):
-    ax, ay, az, gx, gy, gz, mx, my, mz = struct.unpack('>9f', data)
+    ax, ay, az, gx, gy, gz, mx, my, mz = struct.unpack('>9h', data)
     return [
-        {"id": "imu.accel_x", "value": ax},
-        {"id": "imu.accel_y", "value": ay},
-        {"id": "imu.accel_z", "value": az},
-        {"id": "imu.gyro_x",  "value": gx},
-        {"id": "imu.gyro_y",  "value": gy},
-        {"id": "imu.gyro_z",  "value": gz},
-        {"id": "imu.mag_x",   "value": mx},
-        {"id": "imu.mag_y",   "value": my},
-        {"id": "imu.mag_z",   "value": mz},
+        {"id": "imu.accel_x", "value": ax * IMU_ACCEL_SCALE},
+        {"id": "imu.accel_y", "value": ay * IMU_ACCEL_SCALE},
+        {"id": "imu.accel_z", "value": az * IMU_ACCEL_SCALE},
+        {"id": "imu.gyro_x",  "value": gx * IMU_GYRO_SCALE},
+        {"id": "imu.gyro_y",  "value": gy * IMU_GYRO_SCALE},
+        {"id": "imu.gyro_z",  "value": gz * IMU_GYRO_SCALE},
+        {"id": "imu.mag_x",   "value": mx * IMU_MAG_SCALE},
+        {"id": "imu.mag_y",   "value": my * IMU_MAG_SCALE},
+        {"id": "imu.mag_z",   "value": mz * IMU_MAG_SCALE},
     ]
 
 def unpack_gps(data):
-    lat, lon, alt, speed = struct.unpack('>4f', data)
+    lat, lon, alt = struct.unpack('>iiH', data)
     return [
-        {"id": "gps.lat",   "value": lat},
-        {"id": "gps.lon",   "value": lon},
-        {"id": "gps.alt",   "value": alt},
-        {"id": "gps.speed", "value": speed},
+        {"id": "gps.lat", "value": lat / 1e6},
+        {"id": "gps.lon", "value": lon / 1e6},
+        {"id": "gps.alt", "value": float(alt)},
     ]
 
 def unpack_baro(data):
-    presion, temp, altitud = struct.unpack('>3f', data)
+    presion, temp, altitud = struct.unpack('>HhH', data)
     return [
-        {"id": "baro.presion", "value": presion},
-        {"id": "baro.temp",    "value": temp},
-        {"id": "baro.alt",     "value": altitud},
+        {"id": "baro.presion", "value": presion / 10.0},
+        {"id": "baro.temp",    "value": temp    / 100.0},
+        {"id": "baro.alt",     "value": altitud / 10.0},
     ]
 
 UNPACKERS = {
@@ -66,7 +90,7 @@ UNPACKERS = {
     BARO_TYPE: unpack_baro,
 }
 
-# modo prueba 
+# Modo prueba
 async def fake_serial():
     while True:
         ts = int(time.time() * 1000)
@@ -88,26 +112,65 @@ async def fake_serial():
             await broadcast(json.dumps(m))
         await asyncio.sleep(0.5)
 
-# modo real
+# Modo real
 def leer_serial(queue, loop):
     transfer = Transfer(PORT, baudrate=BAUDRATE, timeout=5)
     for packet in transfer.receive_packets():
         if not packet.crcpass or packet.type not in UNPACKERS:
             continue
         mediciones = UNPACKERS[packet.type](packet.data)
-        ts = int.from_bytes(packet.timestamp, 'big') * 1000
-        for m in mediciones:
-            m["timestamp"] = ts
         loop.call_soon_threadsafe(queue.put_nowait, mediciones)
 
 async def procesar_queue(queue):
     while True:
         mediciones = await queue.get()
+        ts = int(time.time() * 1000)
+        for m in mediciones:
+            m["timestamp"] = ts
+        save_to_csv(mediciones)
         for m in mediciones:
             await broadcast(json.dumps(m))
 
-# main
+# History server
+async def handle_history(request):
+    key   = request.match_info['key']
+    try:
+        start = int(float(request.rel_url.query.get('start', 0)))
+    except (ValueError, TypeError):
+        start = 0
+    
+    try:
+        end   = int(float(request.rel_url.query.get('end', int(time.time() * 1000))))
+    except (ValueError, TypeError):
+        end = int(time.time() * 1000)
+
+    results = []
+    try:
+        with open(CSV_FILE, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                ts          = int(row['timestamp'])
+                sensor_var  = f"{row['sensor']}.{row['variable']}"
+                if sensor_var == key and start <= ts <= end:
+                    results.append({"timestamp": ts, "value": float(row['value'])})
+    except FileNotFoundError:
+        pass
+
+    return web.json_response(results, headers={"Access-Control-Allow-Origin": "*"})
+
+async def run_http():
+    app = web.Application()
+    app.router.add_get('/history/{key}', handle_history)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, 'localhost', 8766)
+    await site.start()
+    print("History server corriendo en http://localhost:8766")
+
+# Main
 async def main():
+    init_csv()
+    await run_http()
     async with websockets.serve(handler, "localhost", 8765):
         if MODO_PRUEBA:
             print("Servidor corriendo — modo SIMULACIÓN")

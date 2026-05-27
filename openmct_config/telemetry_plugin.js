@@ -1,25 +1,24 @@
 // telemetry_plugin.js
-// Lo genere con ayuda de ChatGPT, a partir de la documentación oficial de OpenMCT y de ejemplos de plugins existentes.
-//  Luego se pidio en base a necesidades específicas (cargar el dictionary, conectarse al WebSocket, etc).
+// Lo genere con ayuda de IA, a partir de la documentación oficial de OpenMCT.
 
 function UrsaCruxPlugin(wsUrl, dictionaryUrl) {
     return function install(openmct) {
 
-        // ── 1. CARGAR EL DICTIONARY ──────────────────────────────
+        // ── 1. CARGAR DICTIONARY ─────────────────────────────────
         const dictionaryPromise = fetch(dictionaryUrl)
             .then(r => r.json());
 
-        // ── 2. REGISTRAR LOS OBJETOS EN EL ÁRBOL DE OPENMCT ─────
+        // ── 2. REGISTRAR ROOT ────────────────────────────────────
         openmct.objects.addRoot({
             namespace: "ursacrux",
             key: "root"
         });
 
+        // ── 3. OBJECT PROVIDER ───────────────────────────────────
         openmct.objects.addProvider("ursacrux", {
             get(identifier) {
                 return dictionaryPromise.then(dictionary => {
 
-                    // nodo raíz → carpeta que contiene todo
                     if (identifier.key === "root") {
                         return {
                             identifier,
@@ -29,9 +28,12 @@ function UrsaCruxPlugin(wsUrl, dictionaryUrl) {
                         };
                     }
 
-                    // buscar la variable por key
                     const measurement = dictionary.measurements
                         .find(m => m.key === identifier.key);
+
+                    if (!measurement) {
+                        throw new Error(`Measurement no encontrado: ${identifier.key}`);
+                    }
 
                     return {
                         identifier,
@@ -44,7 +46,7 @@ function UrsaCruxPlugin(wsUrl, dictionaryUrl) {
             }
         });
 
-        // ── 3. COMPOSICIÓN: qué hay dentro de la carpeta raíz ───
+        // ── 4. COMPOSITION PROVIDER ──────────────────────────────
         openmct.composition.addProvider({
             appliesTo(domainObject) {
                 return domainObject.identifier.namespace === "ursacrux"
@@ -60,42 +62,71 @@ function UrsaCruxPlugin(wsUrl, dictionaryUrl) {
             }
         });
 
-        // ── 4. WEBSOCKET + RUTEO DE DATOS ────────────────────────
-        const listeners = {};  // { "imu.accel_x": [callback, ...], ... }
-
+        // ── 5. WEBSOCKET REALTIME ────────────────────────────────
+        const listeners = {};
         const ws = new WebSocket(wsUrl);
 
-        ws.onmessage = (event) => {
-            const dato = JSON.parse(event.data);
-            // dato = { id: "imu.accel_x", timestamp: 1714000000000, value: 0.12 }
+        ws.onopen  = () => console.log("✅ WebSocket conectado");
+        ws.onerror = (e) => console.error("❌ Error WebSocket:", e);
+        ws.onclose = () => console.log("⚠️ WebSocket cerrado");
 
-            if (listeners[dato.id]) {
-                listeners[dato.id].forEach(cb => cb({
-                    value: dato.value,
-                    utc: dato.timestamp
-                }));
+        ws.onmessage = (event) => {
+            try {
+                const dato = JSON.parse(event.data);
+                if (listeners[dato.id]) {
+                    listeners[dato.id].forEach(cb => cb({
+                        value: dato.value,
+                        utc: dato.timestamp
+                    }));
+                }
+            } catch (e) {
+                console.error("Error procesando mensaje WebSocket:", e);
             }
         };
 
-        ws.onopen  = () => console.log("WebSocket conectado");
-        ws.onerror = (e) => console.error("WebSocket error", e);
-
-        // ── 5. SUSCRIPCIÓN: openmct llama esto cuando abre un gráfico
+        // ── 6. REALTIME PROVIDER ─────────────────────────────────
         openmct.telemetry.addProvider({
             supportsSubscribe(domainObject) {
                 return domainObject.type === "telemetry";
             },
             subscribe(domainObject, callback) {
                 const key = domainObject.identifier.key;
-
                 if (!listeners[key]) listeners[key] = [];
                 listeners[key].push(callback);
-
-                // retorna función para cancelar suscripción
                 return function unsubscribe() {
                     listeners[key] = listeners[key].filter(cb => cb !== callback);
                 };
             }
         });
+
+        // ── 7. HISTORY PROVIDER ──────────────────────────────────
+        openmct.telemetry.addProvider({
+            supportsRequest(domainObject, options) {
+                return domainObject.identifier.namespace === "ursacrux"
+                    && domainObject.identifier.key !== "root"
+                    && options.strategy !== "latest";
+            },
+            request(domainObject, options = {}) {
+                const key   = domainObject.identifier.key;
+                const start = options.start ?? 0;
+                const end   = options.end ?? Date.now();
+                console.log("📡 Pidiendo historial:", key);
+                const url = `http://localhost:8766/history/${key}?start=${start}&end=${end}`;
+                return fetch(url)
+                    .then(r => r.json())
+                    .then(data => {
+                        console.log("✅ Historial recibido:", data.length, "puntos");
+                        return data.map(d => ({
+                            value: d.value,
+                            utc:   d.timestamp
+                        }));
+                    })
+                    .catch(e => {
+                        console.error("❌ Error historial:", e);
+                        return [];
+                    });
+            }
+        });
+
     };
 }

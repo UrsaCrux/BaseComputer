@@ -4,19 +4,19 @@
     <meta charset="UTF-8">
     <title>UrsaCrux Telemetry</title>
     <script src="./node_modules/openmct/dist/openmct.js"></script>
-    <link rel="stylesheet" href="./node_modules/openmct/dist/openmct.css">
+    <link rel="stylesheet" href="./node_modules/openmct/dist/snowTheme.css">
 </head>
 <body style="height: 100%; margin: 0">
     <div id="app" style="height: 100%"></div>
     <script src="telemetry_plugin.js"></script>
     <script>
         openmct.setAssetPath("./node_modules/openmct/dist");
-
         openmct.install(openmct.plugins.LocalStorage());
         openmct.install(openmct.plugins.MyItems());
         openmct.install(openmct.plugins.DefaultRootName("UrsaCrux"));
         openmct.install(openmct.plugins.UTCTimeSystem());
         openmct.install(openmct.plugins.Clock({ enableClockIndicator: true }));
+        openmct.install(openmct.plugins.Snow());
         openmct.install(openmct.plugins.Conductor({
             menuOptions: [{
                 timeSystem: 'utc',
@@ -25,7 +25,6 @@
             }]
         }));
         openmct.install(UrsaCruxPlugin("ws://localhost:8765", "dictionary.json"));
-
         openmct.start(document.getElementById("app"));
     </script>
 </body>

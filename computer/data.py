@@ -35,20 +35,11 @@ class Packet:
         self.timestamp = timestamp
         self.data = data
         self.crc = crc
-        self.crcpass = self.crc_check(self.head + self.type + self.timestamp + self.data)
+        self.crcpass = self.crc_check(self.head + self.type + self.timestamp + self.data, crc)
         self.full = self.head + self.type + self.timestamp + self.data + self.crc
 
-        if verbose:
-            if not self.crcpass:
-                print(f"Packet of type {self.type} at {self.timestamp} failed CRC.")
-
-
-    def asjson(self)->dict:
-        """Returns a dictionary containing all the packet information to save in a json file."""
-        return {"Type": self.type, "Timestamp": self.timestamp, "Data": self.data, "CRCPass": self.crcpass}
-
     @staticmethod
-    def crc_check(data: bytes) -> bool:
+    def crc_check(data: bytes, expected_crc: bytes) -> bool:
         """Checks if the CRC is correct."""
         crc = 0xFFFF
         for b in data:
@@ -58,11 +49,8 @@ class Packet:
                     crc = (crc << 1) ^ 0x1021
                 else:
                     crc <<= 1
-                crc &= 0xFFFF
-        
-        if crc.to_bytes(2, 'big') == data[-2:]:
-            return True
-        return False
+            crc &= 0xFFFF
+        return crc.to_bytes(2, 'big') == expected_crc
 
     def __str__(self)->str:
         return f"""Packet object with:

@@ -1,33 +1,108 @@
 ﻿<!DOCTYPE html>
 <html style="height: 100%">
+
 <head>
     <meta charset="UTF-8">
+
     <title>UrsaCrux Telemetry</title>
+
+    <!-- OpenMCT -->
     <script src="./node_modules/openmct/dist/openmct.js"></script>
-    <link rel="stylesheet" href="./node_modules/openmct/dist/espressoTheme.css">
+
+    <!-- Tema -->
+    <link
+        rel="stylesheet"
+        href="./node_modules/openmct/dist/espressoTheme.css"
+    >
 </head>
-<body style="height: 100%; margin: 0">
-    <div id="app" style="height: 100%"></div>
+
+<body style="height: 100%; margin: 0;">
+
+    <!-- App -->
+    <div id="app" style="height: 100%;"></div>
+
+    <!-- Plugin -->
     <script src="telemetry_plugin.js"></script>
+
     <script>
+
+        // ─────────────────────────────────────────────────────
+        // CONFIGURACIÓN BASE
+        // ─────────────────────────────────────────────────────
         openmct.setAssetPath("./node_modules/openmct/dist");
 
+        // ─────────────────────────────────────────────────────
+        // PLUGINS OPENMCT
+        // ─────────────────────────────────────────────────────
         openmct.install(openmct.plugins.LocalStorage());
-        openmct.install(openmct.plugins.MyItems());
-        openmct.install(openmct.plugins.DefaultRootName("UrsaCrux"));
-        openmct.install(openmct.plugins.UTCTimeSystem());
-        openmct.install(openmct.plugins.Clock({ enableClockIndicator: true }));
-        openmct.install(openmct.plugins.Espresso());
-        openmct.install(openmct.plugins.Conductor({
-            menuOptions: [{
-                timeSystem: 'utc',
-                clock: 'local',
-                clockOffsets: { start: -30 * 60 * 1000, end: 0 }
-            }]
-        }));
-        openmct.install(UrsaCruxPlugin("ws://localhost:8765", "dictionary.json"));
 
-        openmct.start(document.getElementById("app"));
+        openmct.install(openmct.plugins.MyItems());
+
+        openmct.install(
+            openmct.plugins.DefaultRootName("UrsaCrux")
+        );
+
+        openmct.install(
+            openmct.plugins.UTCTimeSystem()
+        );
+
+        openmct.install(
+            openmct.plugins.Clock({
+                enableClockIndicator: true
+            })
+        );
+
+        openmct.install(
+            openmct.plugins.Espresso()
+        );
+
+        openmct.install(
+            openmct.plugins.Conductor({
+                menuOptions: [
+                    {
+                        timeSystem: "utc",
+                        clock: "local",
+                        clockOffsets: {
+                            start: -30 * 60 * 1000,
+                            end: 0
+                        }
+                    }
+                ]
+            })
+        );
+
+        // ─────────────────────────────────────────────────────
+        // TIPO CUSTOM DE TELEMETRÍA
+        // ─────────────────────────────────────────────────────
+        openmct.types.addType("ursacrux.telemetry", {
+
+            name: "UrsaCrux Telemetry",
+
+            description:
+                "Telemetry data from UrsaCrux sensors",
+
+            cssClass: "icon-telemetry"
+        });
+
+        // ─────────────────────────────────────────────────────
+        // INSTALAR PLUGIN
+        // ─────────────────────────────────────────────────────
+        openmct.install(
+            UrsaCruxPlugin(
+                "ws://localhost:8765",
+                "dictionary.json"
+            )
+        );
+
+        // ─────────────────────────────────────────────────────
+        // INICIAR OPENMCT
+        // ─────────────────────────────────────────────────────
+        openmct.start(
+            document.getElementById("app")
+        );
+
     </script>
+
 </body>
+
 </html>

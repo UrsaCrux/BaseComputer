@@ -1,162 +1,131 @@
-# UrsaCrux - BaseComputer
 
-## Overview
-This repository contains the Base Computer software for the UrsaCrux project. It encompasses the core logic to communicate with external microcontrollers and visualizers.
+# BaseComputerLiz — Fork para Proyecto Hermes
 
-## Project Structure
-- `computer/`: Contains core Python modules for communication and data processing (`communication.py`, `data.py`, `sender.py`).
-- `tests/`: Testing scripts and mock visualizers.
-- `visualizer/`: Components for data visualization.
-- `external_microcontroller/`: Firmware/code for the external microcontrollers.
-- `sketch_sep14a/`: Arduino/Microcontroller sketch files.
+Fork de [BaseComputer](https://github.com/ursacrux/BaseComputer) adaptado para el **Proyecto Hermes** (globo aerostático), con cambios en el protocolo de paquetes binarios PHUC para optimizar la transmisión vía **LoRa SX1262**.
 
-## Getting Started
+---
 
-### Requirements
-- Python 3.x
-- Arduino IDE (if compiling the sketches)
-- Node.js 16+
+## ¿Qué cambió respecto al original?
 
-### Setup
-1. Clone the repository.
-2. Install necessary Python dependencies.
-3. Run the base computer scripts located in the `computer/` directory.
+### 1. Protocolo PHUC adaptado para LoRa (`computer/communication.py`)
 
-## Architecture
+El protocolo original usaba `float32` (4 bytes) para todos los valores, pensado para transmisión serial de corta distancia en el cohete. Para LoRa a largas distancias, se redujo el tamaño de los paquetes usando tipos enteros más pequeños:
 
-```
-[Rocket — Flight Computer]
-   ↓ serial / LoRa (915 MHz)
-[bridge_server.py]
-   ↓ WebSocket (ws://localhost:8765)
-[OpenMCT — browser]
-```
+| Sensor | Original | Hermes | Reducción |
+|--------|----------|--------|-----------|
+| IMU (MPU9250) | 36B (9×float32) | 18B (9×int16) | -50% |
+| GPS (NEO-6M) | 16B (4×float32) | 10B (2×int32 + int16) | -37% |
+| Barómetro (BME280) | 12B (3×float32) | 6B (uint16+int16+uint16) | -50% |
+| **Total por ciclo** | **124B** | **55B** | **-56%** |
 
-`bridge_server.py` receives binary packets from the rocket over serial, unpacks them, and broadcasts them as JSON to OpenMCT via WebSocket.
+El timestamp también se redujo de **4 a 3 bytes**, suficiente para ~4.6 horas de vuelo.
 
-## Supported Sensors
+#### Factores de escala usados
 
-| Type | Sensor | Payload | Variables |
-|------|--------|---------|-----------|
-| `0x01` | IMU (MPU-9250) | 36 bytes | accel xyz, gyro xyz, mag xyz |
-| `0x02` | GPS (NEO-6M) | 16 bytes | lat, lon, alt, speed |
-| `0x03` | Barometer (BME280) | 12 bytes | pressure, temp, altitude |
+| Sensor | Tipo | Escala | Unidad |
+|--------|------|--------|--------|
+| Acelerómetro | int16 | ÷ 100 | m/s² |
+| Giroscopio | int16 | ÷ 100 | °/s |
+| Magnetómetro | int16 | ÷ 10 | µT |
+| Latitud/Longitud | int32 | ÷ 1e6 | ° (precisión 0.11m) |
+| Altitud GPS | uint16 | × 1 | m |
+| Presión | uint16 | ÷ 10 | Pa |
+| Temperatura | int16 | ÷ 100 | °C |
+| Altitud baro | uint16 | ÷ 10 | m |
 
-## Packet Protocol (PHUC)
+### 2. Fix en verificación CRC (`computer/data.py`)
 
-```
-[HEAD 0x14][TYPE 1B][TIMESTAMP 4B][DATA N bytes][CRC 2B]
-```
+La función `crc_check` original comparaba el CRC calculado contra los últimos 2 bytes del DATA en vez del CRC separado. Se corrigió la firma para recibir el CRC esperado como parámetro independiente:
 
-## Project Structure
-
-```
-BaseComputer/
-├── computer/               # Core Python modules
-│   ├── communication.py    # PHUC protocol, Transfer, Packet
-│   ├── data.py             # Data processing
-│   └── sender.py           # Packet sender
-├── openmct_config/         # Telemetry visualizer (OpenMCT)
-│   ├── node_modules/       # Frontend dependencies (not tracked)
-│   ├── package.json
-│   ├── index.html          # OpenMCT entry point
-│   ├── dictionary.json     # Telemetry variable definitions
-│   └── telemetry_plugin.js # WebSocket plugin for OpenMCT
-├── tests/                  # Testing scripts and mock visualizers
-├── sketch_sep14a/          # Arduino/Microcontroller sketch files
-├── logs/                   # Flight data logs
-├── bridge_server.py        # WebSocket server + serial reader
-├── test_ws.py              # WebSocket connection test
-├── requirements.txt        # Python dependencies
-└── README.md
-```
-
-## Extended installation
-
-1. Clone the repository:
-```bash
-git clone <repo-url>
-cd BaseComputer
-```
-
-2. Install Python dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-3. Install frontend dependencies:
-```bash
-cd openmct_config
-npm install
-```
-
-## Running the System
-
-### Simulation mode (no hardware)
-
-Make sure `bridge_server.py` has:
 ```python
-MODO_PRUEBA = True
+# Antes (bugueado)
+def crc_check(data: bytes) -> bool:
+    ...
+    if crc.to_bytes(2, 'big') == data[-2:]:  # comparaba contra el data
+
+# Después (correcto)
+def crc_check(data: bytes, expected_crc: bytes) -> bool:
+    ...
+    return crc.to_bytes(2, 'big') == expected_crc  # compara contra el CRC real
 ```
 
-**Terminal 1 — WebSocket server:**
+### 3. Timestamp sincronizado con el PC (`bridge_server.py`)
+
+El Arduino usa `millis()` que cuenta desde que se enciende. OpenMCT necesita timestamps Unix reales. El bridge ahora reemplaza el timestamp del paquete con el reloj del PC:
+
+```python
+# En procesar_queue()
+ts = int(time.time() * 1000)  # tiempo real del PC en ms
+```
+
+### 4. Nuevas funciones unpack (`bridge_server.py`)
+
+Se actualizaron `unpack_imu()`, `unpack_gps()` y `unpack_baro()` para deserializar los nuevos tipos enteros y aplicar los factores de escala correctos.
+
+---
+
+## Cómo correr el sistema
+
+### Requisitos
+- Python 3.12+
+- Node.js
+- `pip install pyserial websockets`
+
+### Pasos
+
+**Terminal 1 — Bridge serial:**
 ```bash
+cd BaseComputerLiz
 python bridge_server.py
 ```
 
-**Terminal 2 — HTTP server:**
+**Terminal 2 — OpenMCT:**
 ```bash
-cd openmct_config
-python -m http.server 8080
+cd BaseComputerLiz/openmct_config
+npx http-server . -p 8080
 ```
 
-Open in browser:
-```
-http://localhost:8080
-```
+Abrir en Chrome: **http://127.0.0.1:8080**
 
-### Real mode (with LoRa hardware)
+### Configuración en `bridge_server.py`
 
-Change in `bridge_server.py`:
 ```python
-MODO_PRUEBA = False
-PORT = "/dev/ttyUSB0"  # Linux
-# PORT = "COM3"        # Windows
+MODO_PRUEBA = False   # True = datos falsos, False = serial real
+PORT        = "COM3"  # Puerto serial del Arduino/Raspberry Pi
+BAUDRATE    = 115200
 ```
 
-Then run the same as simulation mode.
+---
 
-### Verify WebSocket connection
+## Stack completo
 
-```bash
-python test_ws.py
+```
+[Sensor / Arduino]
+      ↓ serial (PHUC binario)
+[bridge_server.py]
+      ↓ WebSocket ws://localhost:8765
+[OpenMCT]
 ```
 
-You should see 5 lines of JSON with sensor data.
+---
 
-## Adding New Packet Types
+## Sensores soportados
 
-1. Add the type in `computer/communication.py`:
-```python
-NEW_TYPE = b"\x04"
-TYPES_PAYLOAD = {
-    ...
-    NEW_TYPE: N,  # payload size in bytes
-}
-```
+| Sensor | Chip | Tipo paquete |
+|--------|------|-------------|
+| IMU | MPU9250 | `0x01` |
+| GPS | NEO-6M | `0x02` |
+| Barómetro | BME280 | `0x03` |
 
-2. Add the unpacker in `bridge_server.py`:
-```python
-def unpack_new(data):
-    val1, val2 = struct.unpack('>2f', data)
-    return [
-        {"id": "new.val1", "value": val1},
-        {"id": "new.val2", "value": val2},
-    ]
-```
+---
 
-3. Add the variable in `openmct_config/dictionary.json`.
+## Pendiente para Hermes
 
+- [ ] Conectar sensores reales (MPU9250, NEO-6M, BME280)
+- [ ] Migrar de Arduino Uno a Raspberry Pi
+- [ ] Integrar módulo LoRa SX1262
+- [ ] Agregar empaquetado GPS y BARO en el firmware
+- [ ] Validar CRC en condiciones de ruido RF
 ## License
 
 See the `LICENSE` file for more details.
