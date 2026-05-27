@@ -1,7 +1,7 @@
 # -----Editar readme ----
 ## BaseComputerLiz — Fork para Proyecto Hermes
 
----
+----
 
 ## ¿Qué cambió respecto al original?
 
