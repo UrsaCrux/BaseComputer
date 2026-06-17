@@ -1,10 +1,3 @@
-
-# BaseComputerLiz — Fork para Proyecto Hermes
-
-Fork de [BaseComputer](https://github.com/ursacrux/BaseComputer) adaptado para el **Proyecto Hermes** (globo aerostático), con cambios en el protocolo de paquetes binarios PHUC para optimizar la transmisión vía **LoRa SX1262**.
-
----
-
 ## ¿Qué cambió respecto al original?
 
 ### 1. Protocolo PHUC adaptado para LoRa (`computer/communication.py`)
