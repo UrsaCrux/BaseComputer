@@ -3,25 +3,6 @@ import serial.tools.list_ports
 
 from .data import Packet
 from typing import Generator
-HEAD = b"\x14"
-IMAGE_TYPE = b"\x00"
-IMU_TYPE   = b"\x01"
-GPS_TYPE   = b"\x02"
-BARO_TYPE  = b"\x03"
-
-# Tamaños nuevos (modificables según config del microcontrolador)
-TYPES_PAYLOAD = {
-    IMAGE_TYPE: 48,
-    IMU_TYPE:   18,  
-    GPS_TYPE:   10,  
-    BARO_TYPE:   6,  
-}
-
-# Factores de escala para reconstruir las unidades reales(para mas realismo)
-IMU_ACCEL_SCALE = 1 / 100.0   # LSB m/s²  (ajustar según config MPU9250)
-IMU_GYRO_SCALE  = 1 / 100.0   # LSB °/s
-IMU_MAG_SCALE   = 1 / 10.0    # LSB → µT
-
 
 class Transfer:
 
