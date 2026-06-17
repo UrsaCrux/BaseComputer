@@ -3,7 +3,7 @@
 
 Fork de [BaseComputer](https://github.com/ursacrux/BaseComputer) adaptado para el **Proyecto Hermes** (globo aerostático), con cambios en el protocolo de paquetes binarios PHUC para optimizar la transmisión vía **LoRa SX1262**.
 
----
+----
 
 ## ¿Qué cambió respecto al original?
 
@@ -19,7 +19,7 @@ El protocolo original usaba `float32` ahora usa int(16-32)
 | **Total por ciclo** | **124B** | **55B** | **-56%** |
 
 
-#### Factores de escala usados::
+#### Factores de escala usados;
 
 | Sensor | Tipo | Escala | Unidad |
 |--------|------|--------|--------|
