@@ -1,130 +1,137 @@
+# BaseComputer — Proyecto Hermes
 
-# BaseComputerLiz — Fork para Proyecto Hermes
-
-Fork de [BaseComputer](https://github.com/ursacrux/BaseComputer) adaptado para el **Proyecto Hermes** (globo aerostático), con cambios en el protocolo de paquetes binarios PHUC para optimizar la transmisión vía **LoRa SX1262**.
-
-----
-
-## ¿Qué cambió respecto al original?
-
-### 1. Protocolo PHUC adaptado para LoRa (`computer/communication.py`)
-
-El protocolo original usaba `float32` ahora usa int(16-32)
-
-| Sensor | Original | Hermes | Reducción |
-|--------|----------|--------|-----------|
-| IMU (MPU9250) | 36B (9×float32) | 18B (9×int16) | -50% |
-| GPS (NEO-6M) | 16B (4×float32) | 10B (2×int32 + int16) | -37% |
-| Barómetro (BME280) | 12B (3×float32) | 6B (uint16+int16+uint16) | -50% |
-| **Total por ciclo** | **124B** | **55B** | **-56%** |
-
-
-#### Factores de escala usados;
-
-| Sensor | Tipo | Escala | Unidad |
-|--------|------|--------|--------|
-| Acelerómetro | int16 | ÷ 100 | m/s² |
-| Giroscopio | int16 | ÷ 100 | °/s |
-| Magnetómetro | int16 | ÷ 10 | µT |
-| Latitud/Longitud | int32 | ÷ 1e6 | ° (precisión 0.11m) |
-| Altitud GPS | uint16 | × 1 | m |
-| Presión | uint16 | ÷ 10 | Pa |
-| Temperatura | int16 | ÷ 100 | °C |
-| Altitud baro | uint16 | ÷ 10 | m |
-
-### 2. Fix en verificación CRC (`computer/data.py`)
-
-La función `crc_check` original comparaba el CRC calculado contra los últimos 2 bytes del DATA en vez del CRC separado. Se corrigió la firma para recibir el CRC esperado como parámetro independiente:
-
-```python
-# Antes (bugueado)
-def crc_check(data: bytes) -> bool:
-    ...
-    if crc.to_bytes(2, 'big') == data[-2:]:  # comparaba contra el data
-
-# Después (correcto)
-def crc_check(data: bytes, expected_crc: bytes) -> bool:
-    ...
-    return crc.to_bytes(2, 'big') == expected_crc  # compara contra el CRC real
-```
-
-### 3. Timestamp sincronizado con el PC (`bridge_server.py`)
-
-El Arduino usa `millis()` que cuenta desde que se enciende. OpenMCT necesita timestamps Unix reales. El bridge ahora reemplaza el timestamp del paquete con el reloj del PC:
-
-```python
-# En procesar_queue()
-ts = int(time.time() * 1000)  # tiempo real del PC en ms
-```
-
-### 4. Nuevas funciones unpack (`bridge_server.py`)
-
-Se actualizaron `unpack_imu()`, `unpack_gps()` y `unpack_baro()` para deserializar los nuevos tipos enteros y aplicar los factores de escala correctos.
+Este es un fork de [BaseComputer](https://github.com/ursacrux/BaseComputer) adaptado para el **Proyecto Hermes** (globo aerostático), con cambios en el protocolo de paquetes binarios PHUC para optimizar la transmisión de telemetría a través de **LoRa SX1262**.
 
 ---
 
-## Cómo correr el sistema
+## 1. Estructura y Módulo Python (`computer`)
 
-### Requisitos
-- Python 3.12+
-- Node.js
-- `pip install pyserial websockets`
+El sistema cuenta con un paquete local de Python llamado `computer` que encapsula la lógica de comunicación serial y la estructura de los datos de los sensores.
 
-### Pasos
+### Componentes del Módulo:
+* **[data.py](computer/data.py)**: Define los tipos de datos (`IMU`, `GPS`, `Barometer` que heredan de `DataType`), el formato de paquete general (`Packet`), y los factores de escala necesarios para decodificar la información binaria.
+* **[serial.py](computer/serial.py)**: Implementa la clase `Transfer` encargada de gestionar la conexión serial de manera robusta usando `pyserial`.
 
-**Terminal 1 — Bridge serial:**
+### Instalación Local del Paquete:
+Para poder importar `computer` en scripts externos (como el servidor puente), debes instalarlo localmente en tu entorno de Python.
+
+Desde el directorio raíz del proyecto:
 ```bash
-cd BaseComputerLiz
-python bridge_server.py
+pip install -e ./computer
 ```
 
-**Terminal 2 — OpenMCT:**
+O navegando directamente a la carpeta del paquete:
 ```bash
-cd BaseComputerLiz/openmct_config
+cd computer
+pip install -e .
+```
+
+*Nota: La opción `-e` (editable) permite que cualquier cambio realizado en el código del módulo `computer` se aplique inmediatamente sin necesidad de reinstalar.*
+
+---
+
+## 2. Inconsistencias Detectadas entre el Código y el Simulador
+
+Para el correcto desarrollo e integración con firmware, se deben tener en cuenta las siguientes discrepancias actuales en la base de código:
+
+### A. Tipos de Paquetes (Bytes Identificadores)
+Existe un desfase en los identificadores de tipo de paquete entre la definición de Python y la del firmware simulador de Arduino:
+
+| Sensor | Python (`computer/data.py`) | Arduino (`Arduinopruebasensores.ino`) |
+| :--- | :---: | :---: |
+| **IMU** | `0x00` (`IMU_BYTE`) | `0x01` (`IMU_TYPE`) |
+| **GPS** | `0x01` (`GPS_BYTE`) | `0x02` (`GPS_TYPE`) |
+| **Barómetro** | `0x02` (`BARO_BYTE`) | `0x03` (`BARO_TYPE`) |
+
+> [!WARNING]
+> Dado que el servidor `bridge_server.py` utiliza las constantes de `computer/data.py` (`0x00`, `0x01`, `0x02`) para registrar los deserializadores en el diccionario `UNPACKERS`, los paquetes reales enviados por el Arduino con ID `0x01`, `0x02` y `0x03` no serán reconocidos a menos que se sincronicen ambos lados.
+
+### B. Tamaño del Payload de GPS
+* En `computer/data.py`, el tamaño del payload de GPS está configurado como `GPS_PAYLOAD = 0 # Not defined yet`.
+* Sin embargo, tanto el simulador Arduino (`Arduinopruebasensores.ino`) como el desempaquetador `unpack_gps` en `bridge_server.py` esperan un payload de **10 bytes** (`struct.unpack('>iiH', data)` de 2 enteros de 4 bytes y 1 entero de 2 bytes).
+
+---
+
+## 3. Protocolo de Paquetes Binarios (PHUC)
+
+El protocolo original usaba variables de tipo `float32` (4 bytes). Para optimizar el ancho de banda en la transmisión por LoRa, se migraron a enteros con escala (`int16` e `int32`), logrando una reducción significativa del tamaño del paquete.
+
+### Estructura del Paquete
+```
+[HEADER 1B] [TYPE 1B] [TIMESTAMP 4B] [DATA 0-128B] [CRC 2B]
+```
+
+### Comparación de Tamaños de Payload (Datos)
+
+| Sensor | Formato Original | Formato Hermes | Reducción |
+| :--- | :--- | :--- | :---: |
+| **IMU (MPU9250)** | 36B (9 × float32) | 18B (9 × int16) | **-50%** |
+| **GPS (NEO-6M)** | 16B (4 × float32) | 10B (2 × int32 + int16) | **-37%** |
+| **Barómetro (BME280)** | 12B (3 × float32) | 6B (uint16 + int16 + uint16) | **-50%** |
+| **Total de Telemetría** | **64B** | **34B** | **-46.8%** |
+
+### Factores de Escala
+
+| Sensor | Tipo de Dato | Escala / Operación | Unidad Real |
+| :--- | :--- | :--- | :---: |
+| **Acelerómetro** | `int16` | Valor × `0.01` (÷ 100) | m/s² |
+| **Groscopio** | `int16` | Valor × `0.01` (÷ 100) | °/s |
+| **Magnetómetro** | `int16` | Valor × `0.1` (÷ 10) | µT |
+| **Latitud / Longitud** | `int32` | Valor / `1e6` | Grados (°) |
+| **Altitud GPS** | `uint16` | Valor directo | Metros (m) |
+| **Presión** | `uint16` | Valor × `0.1` (÷ 10) | Pa |
+| **Temperatura** | `int16` | Valor × `0.01` (÷ 100) | °C |
+| **Altitud Barométrica** | `uint16` | Valor × `0.1` (÷ 10) | Metros (m) |
+
+---
+
+## 4. Instrucciones de Ejecución
+
+### Requisitos Previos
+* **Python 3.12+**
+* **Node.js**
+
+### Instalación de Dependencias
+Instala los paquetes necesarios de Python:
+```bash
+pip install -r requirements.txt
+```
+*Nota: Asegúrate de tener instalado también `aiohttp` si vas a utilizar el servidor de historial integrado:*
+```bash
+pip install aiohttp
+```
+
+### Pasos para Levantar el Sistema
+
+#### Paso 1: Iniciar el Bridge Telemetría (Python)
+Este puente lee del puerto serial o simula datos en tiempo real, guarda los registros en un archivo CSV en la carpeta `telemetry_logs`, y los retransmite a través de WebSockets.
+
+```bash
+# Ejecutar desde el directorio raíz
+python OpenMCT/bridge_server.py
+```
+
+*Configuraciones en `OpenMCT/bridge_server.py`:*
+* `MODO_PRUEBA = True` para simular datos internamente sin necesidad de conectar hardware.
+* `PORT = "COM3"` y `BAUDRATE = 115200` para comunicación real por puerto serial.
+
+#### Paso 2: Iniciar OpenMCT (Node.js/Web)
+Instala las dependencias de OpenMCT y levanta el servidor local:
+
+```bash
+cd OpenMCT/openmct_config
+npm install
 npx http-server . -p 8080
 ```
 
-Abrir en Chrome: **http://127.0.0.1:8080**
-
-### Configuración en `bridge_server.py`
-
-```python
-MODO_PRUEBA = False   # True = datos falsos, False = serial real
-PORT        = "COM3"  # Puerto serial del Arduino/Raspberry Pi
-BAUDRATE    = 115200
-```
+#### Paso 3: Visualización
+Abre tu navegador de preferencia (recomendado Chrome) e ingresa a:
+**[http://127.0.0.1:8080](http://127.0.0.1:8080)**
 
 ---
 
-## Stack completo
+## 5. Puertos Utilizados
 
-```
-[Sensor / Arduino]
-      ↓ serial (PHUC binario)
-[bridge_server.py]
-      ↓ WebSocket ws://localhost:8765
-[OpenMCT]
-```
-
----
-
-## Sensores soportados
-
-| Sensor | Chip | Tipo paquete |
-|--------|------|-------------|
-| IMU | MPU9250 | `0x01` |
-| GPS | NEO-6M | `0x02` |
-| Barómetro | BME280 | `0x03` |
-
----
-
-## Pendiente para Hermes
-
-- [ ] Conectar sensores reales (MPU9250, NEO-6M, BME280)
-- [ ] Migrar de Arduino Uno a Raspberry Pi
-- [ ] Integrar módulo LoRa SX1262
-- [ ] Agregar empaquetado GPS y BARO en el firmware
-- [ ] Validar CRC en condiciones de ruido RF
-## License
-
-See the `LICENSE` file for more details.
+* **`8080`**: Servidor HTTP local de la interfaz de OpenMCT.
+* **`8765`**: Servidor WebSocket de datos en tiempo real.
+* **`8766`**: Servidor de Historial (History Provider) REST API para consulta de datos históricos desde el CSV.
