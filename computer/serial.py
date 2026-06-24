@@ -97,22 +97,6 @@ class Transfer:
         """
         return [self.channel.readline() for _ in range(n)]
 
-    def send(self, data: bytes) -> int:
-        """
-        Sends data over the serial channel.
-
-        Parameters
-        ----------
-        data : bytes
-            Data to send.
-
-        Returns
-        -------
-        int
-            Number of bytes written.
-        """
-        return self.channel.write(data)
-
     def receive(self) -> Generator[bytes, None, None]:
         """
         Receives continuous data from the serial channel until timeout.
@@ -125,38 +109,3 @@ class Transfer:
         while line := self.channel.readline():
             yield line
         print("Reception ended. No data received after timeout of", self.timeout, "seconds.")
-
-    def send_packet(self, packet: Packet) -> int:
-        """
-        Sends a packet over the serial channel.
-
-        Parameters
-        ----------
-        packet : bytes
-            Packet data to send.
-
-        Returns
-        -------
-        int
-            Number of bytes written.
-        """
-
-        return self.channel.write(packet.head + packet.type + packet.timestamp + packet.data + packet.crc)
-
-    def receive_packets(self):
-        while True:
-            while self.getbyte() != HEAD:
-                continue
-            
-            packet_byte = self.getbyte()
-            if packet_byte not in TYPES_PAYLOAD:
-                print(f"Unknown packet type: {packet_byte}")
-                continue
-
-            length = TYPES_PAYLOAD[packet_byte]
-            timestamp = self.getbytes(4)  # ver si cambiar de 4 a 3
-            data = self.getbytes(length)
-            crc = self.getbytes(2)
-
-            packet = Packet(HEAD, packet_byte, timestamp, data, crc)
-            yield packet

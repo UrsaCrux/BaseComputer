@@ -9,10 +9,12 @@ import csv
 import os
 from datetime import datetime
 from aiohttp import web
-from computer.communication import (
-    Transfer, IMU_TYPE, GPS_TYPE, BARO_TYPE,
+
+from computer.data import (
+    IMU_BYTE, GPS_BYTE, BARO_BYTE,
     IMU_ACCEL_SCALE, IMU_GYRO_SCALE, IMU_MAG_SCALE
 )
+from computer.serial import Transfer
 
 MODO_PRUEBA = False
 PORT        = "COM3"
@@ -85,9 +87,9 @@ def unpack_baro(data):
     ]
 
 UNPACKERS = {
-    IMU_TYPE:  unpack_imu,
-    GPS_TYPE:  unpack_gps,
-    BARO_TYPE: unpack_baro,
+    IMU_BYTE:  unpack_imu,
+    GPS_BYTE:  unpack_gps,
+    BARO_BYTE: unpack_baro,
 }
 
 # Modo prueba

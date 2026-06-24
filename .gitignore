@@ -1,1 +1,7 @@
 venv/
+*__pycache__/
+*.pyc
+*.egg-info
+*setup.py
+*.csv
+build
