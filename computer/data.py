@@ -2,14 +2,18 @@ import struct
 
 HEAD = b"\x14"
 
+TIMESTAMP_LENGTH = 4
+HEADER_LENGTH = 1
+TYPE_LENGTH = 1
+
 #All data types we expect to recieve
 IMU_BYTE   = b"\x00"
 GPS_BYTE   = b"\x01"
 BARO_BYTE  = b"\x02"
 
 #Bytes of each data_type
-IMU_PAYLOAD = 36 # 9 float 32 
-GPS_PAYLOAD = 0 # Not defined yet
+IMU_PAYLOAD  = 36 # 9 float 32 
+GPS_PAYLOAD  = 0 # Not defined yet
 BARO_PAYLOAD = 12 # 3 float32
 
 # Factores de escala para reconstruir las unidades reales(para mas realismo) AI GENERATED WE NEED TO CHECK IT OURSELVES
@@ -39,17 +43,17 @@ class DataType:
         raise NotImplementedError("Data type has not implemented a read_data method.")
 
     def __str__(self)->str:
-        return f"Type: {self.name} | Byte: {self.type_byte.hex()} | Payload: {self.payload_size} bytes"
+        return f"Type: {self.name} | Byte: {self.type_byte} | Payload: {self.payload_size} bytes"
     
     def __len__(self)->int:
         return self.payload_size
 
 class NullType(DataType):
     def __init__(self):
-        super().__init__(None, None, "Null")
+        super().__init__(b"", -1, "Null")
     
     def read_data(self, data)-> dict: 
-        return {}
+        return {None: None}
 
 class IMU(DataType):
     """Inertial Measurement Unit (IMU) data type."""
@@ -133,13 +137,54 @@ class Packet:
         self.data_bytes = data
         self.length = len(head) + len(type) + len(timestamp) + len(data)
         self.data_length = len(data)
-
         self.data_type = get_type(type)
+        self.consistency = self.validity_check()
+        self.valid = self.is_valid()
+
+        if self.consistency[-1]:
+            self.data = self.get_data()
+        else:
+            self.data = None
 
     def get_data(self) -> dict[str,float]:
         """Returns the data of the packet in a dictionary."""
         return self.data_type.read_data(self.data_bytes)
+
+    def validity_check(self)->tuple[bool]:
+        """Checks the consistency of the packet.
+        Returns a tuple of booleans indicating the consistency of the packet.
         
+        Returns
+        -------
+        bool[0]: head_consistent
+            True if the head byte is equal with the expected header byte.
+        bool[1]: type_consistent
+            True if the type byte is equal is a valid DataType.
+        bool[2]: timestamp_consistent
+            True if the timestamp length is equal with the expected timestamp length.
+        bool[3]: length_consistent
+            True if the data length is equal with the expected data length.
+        bool[4]: data_consistent
+            True if the data is consistent with the recieved data type.
+        """
+
+        length_consistent = self.data_length == self.data_type.payload_size
+        data_consistent = False
+        try:
+            self.get_data()
+            data_consistent = True
+        except:
+            data_consistent = False
+
+        head_consistent = self.head == HEAD
+        type_consistent = False if isinstance(self.data_type,NullType) else True
+        timestamp_consistent = len(self.timestamp) == TIMESTAMP_LENGTH
+
+        return (head_consistent,type_consistent,timestamp_consistent,length_consistent,data_consistent)
+    
+    def is_valid(self)->bool:
+        return all(self.consistency)
+
     def __str__(self)->str:
         return f"""
         Packet object with:
@@ -148,16 +193,22 @@ class Packet:
         Timestamp: {self.timestamp.hex(" ")}
         Data: {self.data_bytes.hex(" ")}
         Length: {self.length}
+        Data: {self.data}
+        Validity: {self.is_valid()} | {self.consistency}
+        Length: {self.data_length} | {self.data_type.payload_size}
         """
     
     def json(self)->dict:
         return {
             "head": self.head.hex(),
-            "type": self.type_byte.hex(),
+            "type": self.data_type.name,
             "timestamp": self.timestamp.hex(),
             "data": self.data_bytes.hex(),
             "length": self.length,
-            "data_length": self.data_length
+            "data_length": self.data_length,
+            "data": self.data,
+            "consistency": self.consistency,
+            "valid": self.valid
         }
 
     def __len__(self)->int:
