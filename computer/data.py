@@ -13,7 +13,7 @@ BARO_BYTE  = b"\x02"
 
 #Bytes of each data_type
 IMU_PAYLOAD  = 36 # 9 float 32 
-GPS_PAYLOAD  = 0 # Not defined yet
+GPS_PAYLOAD  = 11 # 2 int32 + 1 int16 + 1 byte
 BARO_PAYLOAD = 12 # 3 float32
 
 # Factores de escala para reconstruir las unidades reales(para mas realismo) AI GENERATED WE NEED TO CHECK IT OURSELVES
@@ -37,9 +37,8 @@ class DataType:
         self.type_byte = type_byte
         self.payload_size = payload_size
         self.name = name
-    
-    @staticmethod
-    def read_data()-> None: 
+
+    def read_data(self, data:bytes)-> dict[str, float]:
         raise NotImplementedError("Data type has not implemented a read_data method.")
 
     def __str__(self)->str:
@@ -52,7 +51,7 @@ class NullType(DataType):
     def __init__(self):
         super().__init__(b"", -1, "Null")
     
-    def read_data(self, data)-> dict: 
+    def read_data(self, data:bytes)-> dict: 
         return {None: None}
 
 class IMU(DataType):
@@ -60,7 +59,7 @@ class IMU(DataType):
     def __init__(self):
         super().__init__(IMU_BYTE, IMU_PAYLOAD, "IMU")
     
-    def read_data(self, data)-> dict[str,float]:
+    def read_data(self, data:bytes)-> dict[str,float]:
         acc_x, acc_y, acc_z, mag_x, mag_y, mag_z, gyro_x, gyro_y, gyro_z = struct.unpack(">9f",data)
         return {
             "acc_x": acc_x,
@@ -79,9 +78,18 @@ class GPS(DataType):
     def __init__(self):
         super().__init__(GPS_BYTE, GPS_PAYLOAD, "GPS")
     
-    def read_data(self)-> None:
-        # Implement GPS-specific data parsing logic here
-        pass
+    def read_data(self, data:bytes)-> dict[str,float]:
+        lat, lon, alt, flags = struct.unpack('>2ihB', data)
+        #latitude (degrees) (4 bytes)
+        #longitude (degrees) (4 bytes)
+        #altitude (meters) (2 bytes)
+        #flags (1 byte)
+        return {
+            "latitude": lat,
+            "longitude": lon,
+            "altitude": alt,
+            "flags": flags
+        }
 
 class Barometer(DataType):
     """Barometer data type."""
@@ -141,16 +149,11 @@ class Packet:
         self.consistency = self.validity_check()
         self.valid = self.is_valid()
 
-        if self.consistency[-1]:
-            self.data = self.get_data()
-        else:
-            self.data = None
-
     def get_data(self) -> dict[str,float]:
         """Returns the data of the packet in a dictionary."""
         return self.data_type.read_data(self.data_bytes)
 
-    def validity_check(self)->tuple[bool]:
+    def validity_check(self)->tuple[bool,...]:
         """Checks the consistency of the packet.
         Returns a tuple of booleans indicating the consistency of the packet.
         
@@ -171,9 +174,10 @@ class Packet:
         length_consistent = self.data_length == self.data_type.payload_size
         data_consistent = False
         try:
-            self.get_data()
+            self.data = self.get_data()
             data_consistent = True
         except:
+            self.data = None
             data_consistent = False
 
         head_consistent = self.head == HEAD
