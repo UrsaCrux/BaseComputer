@@ -9,7 +9,6 @@ import csv
 import os
 from datetime import datetime
 from aiohttp import web
-
 from computer.data import (
     IMU_BYTE, GPS_BYTE, BARO_BYTE,
     IMU_ACCEL_SCALE, IMU_GYRO_SCALE, IMU_MAG_SCALE
